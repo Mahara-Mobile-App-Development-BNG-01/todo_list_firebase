@@ -1,10 +1,15 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:todo_list_firebase/app_router.dart';
 import 'package:todo_list_firebase/firebase_options.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:todo_list_firebase/home_page.dart';
+import 'package:todo_list_firebase/login_page.dart';
+import 'package:todo_list_firebase/profile_page.dart';
 import 'package:todo_list_firebase/task.dart';
 import 'package:todo_list_firebase/task_state.dart';
 
@@ -19,27 +24,13 @@ void main() async {
 }
 
 class MyApp extends StatelessWidget {
+  final _appRouter = AppRouter();
+
   @override
   Widget build(BuildContext context) {
-    final cubit = context.watch<TasksCubit>();
 
-    return MaterialApp(
-      home: Scaffold(
-        appBar: AppBar(
-          title: Text('TODO List'),
-        ),
-        body: Builder(builder: (context) {
-          if (cubit.state is AsyncTaskStateLoaded) {
-            final loadedState = cubit.state as AsyncTaskStateLoaded;
-            return TasksView(loadedState: loadedState);
-          }
-          if (cubit.state is AsyncTaskStateLoading) {
-            return CircularProgressIndicator();
-          }
-
-          return Text((cubit.state as AsyncTaskStateError).error.toString());
-        }),
-      ),
+    return MaterialApp.router(
+      routerConfig: _appRouter.config(),
     );
   }
 }
@@ -70,6 +61,18 @@ class TasksView extends StatelessWidget {
             ),
           )
         ]),
+        Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: TextField(
+            decoration: InputDecoration(
+              border: OutlineInputBorder(),
+              hintText: 'Type To Add',
+            ),
+            onSubmitted: (text) {
+              cubit.addTask(text);
+            },
+          ),
+        ),
         Expanded(
           child: ListView.builder(
               itemCount: loadedState.filteredTasks.length,
@@ -78,7 +81,9 @@ class TasksView extends StatelessWidget {
                 return CheckboxListTile(
                   title: Text(task.title),
                   value: task.completed,
-                  onChanged: (newValue) {},
+                  onChanged: (newValue) {
+                    cubit.changeTask(task.id, newValue ?? false);
+                  },
                 );
               }),
         )
@@ -91,14 +96,15 @@ class TasksCubit extends Cubit<AsyncTasksState> {
   TasksCubit() : super(AsyncTaskStateLoading()) {
     fetchTasks();
   }
+
   late StreamSubscription<QuerySnapshot<Map<String, dynamic>>> sub;
+  final db = FirebaseFirestore.instance;
+
   void fetchTasks() async {
     try {
-      final db = FirebaseFirestore.instance;
-      sub =  db.collection('tasks').snapshots().listen((event) {
-        final List<Task> tasks = event.docs
-            .map((e) => Task.fromJson(e.data()))
-            .toList(); //await fetchTodosFromAPI();
+      sub = db.collection('tasks').snapshots().listen((event) {
+        final List<Task> tasks =
+            event.docs.map((e) => Task.fromJsonID(e.id, e.data())).toList();
 
         print('${tasks}');
 
@@ -136,5 +142,22 @@ class TasksCubit extends Cubit<AsyncTasksState> {
             }).toList()),
       );
     }
+  }
+
+  void addTask(String text) {
+    db.collection('tasks').add(
+      {
+        'title': text,
+        'completed': false,
+      },
+    );
+  }
+
+  void changeTask(String id, bool completed) {
+    db.collection('tasks').doc(id).update(
+      {
+        'completed': completed,
+      },
+    );
   }
 }

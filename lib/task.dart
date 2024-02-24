@@ -1,14 +1,21 @@
-
 class Task {
   final String title;
+  final String id;
   final bool completed;
 
-  Task({required this.title, required this.completed});
+  Task({required this.id, required this.title, required this.completed});
 
   factory Task.fromJson(Map<String, dynamic> json) => Task(
-    title: json['title'],
-    completed: json['completed'],
-  );
+        title: json['title'],
+        completed: json['completed'],
+        id: '',
+      );
+
+  factory Task.fromJsonID(String id, Map<String, dynamic> json) => Task(
+        title: json['title'],
+        completed: json['completed'],
+        id: id,
+      );
 
   @override
   bool operator ==(Object other) =>
